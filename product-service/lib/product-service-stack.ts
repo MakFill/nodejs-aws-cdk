@@ -13,6 +13,8 @@ export class ProductServiceStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_18_X,
       environment: {
         PRODUCT_AWS_REGION: process.env.PRODUCT_AWS_REGION!,
+        PRODUCT_TABLE_NAME: process.env.DDB_PRODUCT_TABLE_NAME!,
+        STOCK_TABLE_NAME: process.env.DDB_STOCK_TABLE_NAME!,
       },
     };
 
@@ -26,6 +28,12 @@ export class ProductServiceStack extends cdk.Stack {
       ...sharedLambdaProps,
       functionName: 'getProductsById',
       entry: './handlers/getProductsById.ts',
+    });
+
+    const createProduct = new NodejsFunction(this, 'createProductLambda', {
+      ...sharedLambdaProps,
+      functionName: 'createProduct',
+      entry: './handlers/createProduct.ts',
     });
 
     const api = new apiGateway.HttpApi(this, 'ProductApi', {
@@ -43,9 +51,15 @@ export class ProductServiceStack extends cdk.Stack {
     });
 
     api.addRoutes({
-      integration: new HttpLambdaIntegration('GetProductsListIntegration', getProductsById),
+      integration: new HttpLambdaIntegration('GetProductByIdIntegration', getProductsById),
       path: '/products/{productId}',
       methods: [apiGateway.HttpMethod.GET],
+    });
+
+    api.addRoutes({
+      integration: new HttpLambdaIntegration('CreateProductIntegration', createProduct),
+      path: '/products',
+      methods: [apiGateway.HttpMethod.POST],
     });
   }
 }
