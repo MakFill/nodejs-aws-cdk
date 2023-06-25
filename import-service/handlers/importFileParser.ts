@@ -5,10 +5,9 @@ import { InvokeAsyncResponse } from 'aws-sdk/clients/lambda';
 
 export const handler: Handler = async (event: S3Event): Promise<InvokeAsyncResponse> => {
   try {
-    const s3 = new AWS.S3();
-
     const { BUCKET_NAME } = process.env;
-
+    const sqs = new AWS.SQS();
+    const s3 = new AWS.S3();
     for (const record of event.Records) {
       const s3Stream = s3
         .getObject({
@@ -21,7 +20,17 @@ export const handler: Handler = async (event: S3Event): Promise<InvokeAsyncRespo
         s3Stream
           .pipe(csv())
           .on('data', (data) => {
-            console.log(data);
+            sqs.sendMessage(
+              {
+                QueueUrl: process.env.IMPORT_QUEUE_URL!,
+                MessageBody: JSON.stringify(data),
+              },
+              (err) => {
+                if (err) {
+                  console.log('ERROR SQS:', err);
+                }
+              }
+            );
           })
           .on('error', (error) => reject('ERROR: ' + error))
           .on('end', async () => {
