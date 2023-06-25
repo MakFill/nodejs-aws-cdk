@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apiGateway from '@aws-cdk/aws-apigatewayv2-alpha';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3notifications from 'aws-cdk-lib/aws-s3-notifications';
 import { HttpLambdaIntegration } from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
@@ -22,10 +23,13 @@ export class ImportServiceStack extends cdk.Stack {
       ],
     });
 
+    const queue = sqs.Queue.fromQueueArn(this, 'ImportFileQueue', process.env.QUEUE_ARN!);
+
     const sharedLambdaProps: Partial<NodejsFunctionProps> = {
       runtime: lambda.Runtime.NODEJS_18_X,
       environment: {
         BUCKET_NAME: process.env.BUCKET_NAME!,
+        IMPORT_QUEUE_URL: queue.queueUrl,
       },
     };
 
@@ -42,6 +46,8 @@ export class ImportServiceStack extends cdk.Stack {
       functionName: 'importFileParser',
       entry: './handlers/importFileParser.ts',
     });
+
+    queue.grantSendMessages(importFileParserLambda);
 
     bucket.grantReadWrite(importFileParserLambda);
     bucket.grantDelete(importFileParserLambda);
