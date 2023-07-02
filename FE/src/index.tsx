@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import axios from "axios";
 import App from "~/components/App/App";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
@@ -34,4 +35,26 @@ root.render(
       </QueryClientProvider>
     </BrowserRouter>
   </React.StrictMode>
+);
+
+axios.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  function (error) {
+    const responseError = error?.response?.status;
+    if (responseError === 400) {
+      alert(error.response.data?.data);
+    }
+
+    if (responseError === 401) {
+      alert("401 Error: Unauthorized");
+    }
+
+    if (responseError === 403) {
+      alert("403 Error: Forbidden");
+    }
+
+    return Promise.reject(error?.response ?? error);
+  }
 );
