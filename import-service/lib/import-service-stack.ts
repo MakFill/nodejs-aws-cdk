@@ -4,9 +4,9 @@ import * as apiGateway from '@aws-cdk/aws-apigatewayv2-alpha';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3notifications from 'aws-cdk-lib/aws-s3-notifications';
-import { HttpLambdaIntegration } from '@aws-cdk/aws-apigatewayv2-integrations-alpha';
 import { NodejsFunction, NodejsFunctionProps } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
+import { ResponseType } from 'aws-cdk-lib/aws-apigateway';
 
 export class ImportServiceStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -53,19 +53,50 @@ export class ImportServiceStack extends cdk.Stack {
     bucket.grantDelete(importFileParserLambda);
     bucket.grantPut(importFileParserLambda);
 
-    const api = new apiGateway.HttpApi(this, 'ImportApi', {
-      corsPreflight: {
+    const importedLambdaFromArn = lambda.Function.fromFunctionArn(
+      this,
+      'external-lambda-from-arn',
+      `arn:aws:lambda:${cdk.Stack.of(this).region}:${
+        cdk.Stack.of(this).account
+      }:function:basicAuthorizer`
+    );
+
+    const api = new cdk.aws_apigateway.RestApi(this, 'ImportApi', {
+      defaultCorsPreflightOptions: {
         allowHeaders: ['*'],
         allowOrigins: ['*'],
         allowMethods: [apiGateway.CorsHttpMethod.ANY],
       },
+      defaultMethodOptions: {
+        authorizer: new cdk.aws_apigateway.TokenAuthorizer(this, 'LambdaAuthorizer', {
+          handler: importedLambdaFromArn,
+        }),
+      },
     });
 
-    api.addRoutes({
-      integration: new HttpLambdaIntegration('ImportProductsIntegration', importProductsFileLambda),
-      path: '/import',
-      methods: [apiGateway.HttpMethod.GET],
+    api.addGatewayResponse('AccessDeniedResponse', {
+      type: ResponseType.ACCESS_DENIED,
+      statusCode: '403',
+      responseHeaders: {
+        'Access-Control-Allow-Origin': "'*'",
+        'Access-Control-Allow-Methods': "'*'",
+        'Access-Control-Allow-Headers': "'*'",
+      },
     });
+
+    api.addGatewayResponse('UnauthorizedResponse', {
+      type: ResponseType.UNAUTHORIZED,
+      statusCode: '401',
+      responseHeaders: {
+        'Access-Control-Allow-Origin': "'*'",
+        'Access-Control-Allow-Methods': "'*'",
+        'Access-Control-Allow-Headers': "'*'",
+      },
+    });
+
+    api.root
+      .resourceForPath('import')
+      .addMethod('GET', new cdk.aws_apigateway.LambdaIntegration(importProductsFileLambda));
 
     bucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
