@@ -18,7 +18,7 @@ export class AppService {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
   async getResponse(): Promise<IResponse> {
-    const { originalUrl, method, body } = this.request;
+    const { originalUrl, method, body, headers } = this.request;
 
     const [, recipient, ...path] = originalUrl.split('/');
     const recipientURL = process.env[recipient];
@@ -33,6 +33,9 @@ export class AppService {
         method: method,
         url: `${recipientURL}/${path.join('/')}`,
         ...(Object.keys(body || {}).length > 0 && { data: body }),
+        ...(headers.authorization && {
+          headers: { Authorization: headers.authorization },
+        }),
       };
 
       try {
